@@ -1,6 +1,8 @@
 ---
 name: code-review
-description: "Multi-perspective adversarial code review with specialized roles (Challenger, Reference Checker, Security Probe, Edge Hunter, Judge). Use when reviewing code for bugs, security issues, maintainability, or before merging. Triggers on 'code-review', 'review this code', 'adversarial code review', 'security review'. Modes include quick, verify, security, and full."
+description: "Multi-perspective adversarial code review with specialized roles (Challenger, Reference Checker, Security Probe, Edge Hunter, Judge). Use when reviewing code for bugs, security issues, maintainability, or before merging. Triggers on 'code-review', 'review this code', 'adversarial code review', 'security review'. Modes include quick, verify, security, quality, full, and pr-review (experimental)."
+metadata:
+  pr-review-mode: experimental
 ---
 
 # Code Review
@@ -97,6 +99,7 @@ Choose mode based on code risk:
 | `security` | Correctness Reviewer + Challenger + Security Probe | Before deploy | `"code-review mode: security"` |
 | `quality` | Correctness Reviewer + Simplifier | Code quality review | `"code-review mode: quality"` |
 | `full` | All seven roles | PR review | `"code-review mode: full"` |
+| `pr-review` | All roles + GitHub integration | GitHub PR review (experimental) | `"pr-review [PR]"` |
 
 **Default mode:** `verify` (Correctness Reviewer + Challenger + Reference Checker) — correctness, adversarial, and existence checks.
 
@@ -210,6 +213,106 @@ task(subagent_type="general", description="Simplifier: Reduce complexity", promp
 
 Note: Judge runs **after** synthesis, not in parallel with other roles.
 
+## PR Review Mode (Experimental)
+
+> ⚠️ **Experimental**: This mode is under active development. Expect rough edges and potential changes to the workflow.
+
+**When to use:** Reviewing a GitHub Pull Request for merge-readiness.
+
+**What it does:**
+1. Fetches PR metadata, diff, and base branch via `gh` CLI
+2. Simulates merged state (what code looks like if PR is merged)
+3. Runs all adversarial roles on merged code
+4. Submits findings as GitHub PR review with inline comments
+
+**Invocation:**
+```
+pr-review <PR_IDENTIFIER> [--base <BRANCH>]
+
+Where <PR_IDENTIFIER> is one of:
+  123                    PR number in current repo
+  owner/repo#123         PR in specific repo  
+  https://github.com/... Full PR URL
+
+Options:
+  --base <branch>        Compare against this branch (default: PR's base branch)
+```
+
+**Requirements:**
+- `gh` CLI installed and authenticated (`gh auth login`)
+- Repository must be a GitHub repository
+- User must have write access to submit reviews
+
+**Experimental Limitations:**
+- Line mapping for inline comments may have edge cases
+- Large PRs (100+ files) may take significant time
+- Draft PRs supported but will submit reviews (won't affect merge status)
+
+**Output:** GitHub PR review submitted with one of:
+- `APPROVE` — No P0/P1 issues found
+- `REQUEST_CHANGES` — P0/P1 issues must be fixed
+- `COMMENT` — Review findings without blocking
+
+**Workflow:**
+1. Parse PR identifier (number, owner/repo#num, or URL)
+2. Gather PR context (metadata, diff, commits)
+3. Fetch base branch files
+4. Simulate merged state for each changed file
+5. Run all adversarial roles on merged files
+6. Synthesize findings via Judge
+7. Map findings to diff positions for inline comments
+8. Submit GitHub PR review
+
+See `references/pr-review-workflow.md` for detailed step-by-step instructions.
+
+## GitHub Integration
+
+### PR Context Gathering
+
+Before PR review, gather context using `gh` CLI:
+
+```bash
+# Get PR metadata (title, body, author, branches, files)
+gh pr view <number> --json title,body,author,baseRefName,headRefName,files,additions,deletions
+
+# Get the diff
+gh pr diff <number>
+
+# Get commit history
+gh api repos/:owner/:repo/pulls/:number/commits
+
+# Fetch base branch file content
+gh api repos/:owner/:repo/contents/:path?ref=:baseRef
+```
+
+### Line Mapping (CRITICAL)
+
+GitHub PR comments use **diff positions**, not file line numbers:
+
+- Position 1 = first line after `@@` hunk header
+- Position increases through whitespace and hunks
+- Position resets at each new file
+
+**Mapping algorithm:**
+1. Parse diff hunks (find `@@ -a,b +c,d @@` headers)
+2. Track position counter starting at 1 for each file
+3. Map findings from merged file line → diff position
+4. Include in `comments[]` array with `path` and `position`
+
+See `references/pr-line-mapping.md` for the full algorithm.
+
+### Submitting Review
+
+```bash
+gh api repos/:owner/:repo/pulls/:number/reviews \
+  -X POST \
+  -f event='APPROVE|REQUEST_CHANGES|COMMENT' \
+  -f body='Review summary markdown' \
+  -F comments='[{"path":"file.ts","position":5,"body":"Issue description"}]'
+```
+
+See `references/pr-review-output-format.md` for the complete payload format.
+
 ## Output Format
 
 All roles return **JSON for agent consumption**. See prompt files in `references/`:
@@ -220,6 +323,12 @@ All roles return **JSON for agent consumption**. See prompt files in `references
 - `references/edge-hunter-prompt.md` — Edge Hunter JSON format
 - `references/simplifier-prompt.md` — Simplifier JSON format
 - `references/judge-prompt.md` — Judge JSON format
+
+**PR Review specific:**
+- `references/pr-review-workflow.md` — Step-by-step PR review instructions
+- `references/pr-context-gathering.md` — GitHub context extraction
+- `references/pr-line-mapping.md` — Diff position mapping algorithm
+- `references/pr-review-output-format.md` — GitHub API payload format
 
 ## Synthesis (CRITICAL)
 

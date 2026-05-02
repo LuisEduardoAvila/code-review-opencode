@@ -129,3 +129,147 @@ When saving JSON, use this structure:
   }
 }
 ```
+
+## PR Review Template
+
+For GitHub PR reviews, use this template to format the review body:
+
+```markdown
+## Code Review Summary
+
+**Decision:** {APPROVE/REQUEST_CHANGES/COMMENT}
+
+### Overview
+{1-2 sentence overall assessment of the PR}
+
+### Critical Issues (P0) — Must Fix Before Merge
+{For each P0 issue:}
+- **{id}**: {description}
+  - Location: `path:line`
+  - Action: {how to fix}
+
+{If no P0 issues:}
+_None_
+
+### Important Issues (P1) — Should Fix
+{For each P1 issue:}
+- **{id}**: {description}
+  - Location: `path:line`
+  - Action: {how to fix}
+
+{If no P1 issues:}
+_None_
+
+### Minor Issues (P2) — Backlog
+{For each P2 issue:}
+- **{id}**: {description}
+
+{If no P2 issues:}
+_None_
+
+### Verified Good
+{For each verified item:}
+- ✅ {item}
+
+### Recommendation
+{Clear action for the developer}
+```
+
+### PR Review Example
+
+```markdown
+## Code Review Summary
+
+**Decision:** REQUEST_CHANGES
+
+### Overview
+One critical security vulnerability (SQL injection) must be fixed before merge. Two important issues should be addressed. One minor optimization suggestion.
+
+### Critical Issues (P0) — Must Fix Before Merge
+- **SEC-001**: SQL injection vulnerability in user search
+  - Location: `src/db/queries.ts:42`
+  - Action: Use parameterized queries instead of string concatenation
+
+### Important Issues (P1) — Should Fix
+- **REF-001**: Missing import for `validateToken`
+  - Location: `src/auth/middleware.ts:15`
+  - Action: Add `import { validateToken } from './utils'`
+
+- **EDGE-001**: Empty array causes TypeError in reduce
+  - Location: `src/utils/aggregator.ts:78`
+  - Action: Add initial value to reduce() or check array length
+
+### Minor Issues (P2) — Backlog
+- **SIMPL-001**: Complex conditional in processUser
+  - Location: `src/services/user.ts:120`
+  - Action: Consider using guard clauses for readability
+
+### Verified Good
+- ✅ All imports resolve correctly
+- ✅ No hardcoded secrets found
+- ✅ Error handling covers main paths
+- ✅ Test coverage for auth flow
+
+### Recommendation
+Fix SQL injection (SEC-001) before merge. Address REF-001 and EDGE-001 in the same PR. SIMPL-001 can be deferred to backlog.
+```
+
+### Inline Comment Format
+
+For inline comments, use this format:
+
+```markdown
+{SEVERITY_ICON} **{Severity}**: {Brief issue description}
+
+{Detailed explanation}
+
+**Suggestion:**
+```{language}
+{code suggestion}
+```
+```
+
+**Example P0:**
+```markdown
+🚨 **Critical**: SQL injection vulnerability
+
+The query string concatenates user input directly, allowing arbitrary SQL execution:
+```ts
+const query = `SELECT * FROM users WHERE name = '${name}'`;
+```
+
+**Suggestion:**
+```ts
+const query = 'SELECT * FROM users WHERE name = ?';
+db.query(query, [name]);
+```
+```
+
+**Example P1:**
+```markdown
+⚠️ **Important**: Missing null check
+
+`user.name` may fail if user is null. This path is reachable when session expires.
+
+**Suggestion:**
+```ts
+if (!user) {
+  throw new AuthenticationError('Session expired');
+}
+return user.name;
+```
+```
+
+**Example P2:**
+```markdown
+💡 **Suggestion**: Consider early return
+
+This nested conditional could be simplified with guard clauses for better readability.
+
+**Suggestion:**
+```ts
+if (!user) return null;
+if (!token) throw new Error('No token');
+// rest of function
+```
+```

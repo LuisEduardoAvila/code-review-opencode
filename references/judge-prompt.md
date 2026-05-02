@@ -122,6 +122,65 @@ Return JSON only. No other text.
 | No findings | APPROVE |
 | Fundamental architecture issues | BLOCK |
 
+## PR Review Decision Rules
+
+For GitHub PR reviews, map findings to GitHub review events:
+
+| Condition | Event | Description |
+|-----------|-------|-------------|
+| No P0/P1 issues | `APPROVE` | Ready to merge |
+| Any P0/P1 that CAN be fixed | `REQUEST_CHANGES` | Needs fixes before merge |
+| Fundamental issues, reconsider approach | `COMMENT` | Discussion needed, not blocking with specific action |
+| Only P2 issues | `APPROVE` | With documented P2s in body |
+
+**Event meanings:**
+- `APPROVE` — Submit approving review, signals ready to merge
+- `REQUEST_CHANGES` — Block merge, requires fixes before merge
+- `COMMENT` — Provide feedback without explicit approval or blocking
+
+## Output Format for PR Reviews
+
+When reviewing a GitHub PR, return this format instead of standard output:
+
+```json
+{
+  "event": "APPROVE|REQUEST_CHANGES|COMMENT",
+  "body": "Markdown summary for review body",
+  "comments": [
+    {
+      "path": "relative/file/path.ts",
+      "position": 5,
+      "body": "Issue description with suggestion"
+    }
+  ],
+  "summary": {
+    "total_findings": 4,
+    "p0_count": 1,
+    "p1_count": 2,
+    "p2_count": 1
+  }
+}
+```
+
+**Comment mapping requirements:**
+- `path` — File path relative to repo root (not absolute)
+- `position` — Diff position (1-indexed from @@ hunk header), NOT file line number
+- `body` — GitHub-flavored markdown
+
+See `references/pr-review-output-format.md` for complete details.
+
+## Comment Severity Formatting
+
+Format inline comments based on severity for GitHub:
+
+| Severity | Format | Example |
+|----------|--------|---------|
+| P0 | `🚨 **Critical**: description` | `🚨 **Critical**: SQL injection vulnerability` |
+| P1 | `⚠️ **Important**: description` | `⚠️ **Important**: Missing null check` |
+| P2 | `💡 **Suggestion**: description` | `💡 **Suggestion**: Could use early return` |
+
+Always include actionable suggestion in the comment body.
+
 ## Example Output
 
 ```json
